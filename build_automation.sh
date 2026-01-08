@@ -226,12 +226,14 @@ build_project() {
     
     if [ "$BUILD_TYPE" = "HW" ]; then
         print_info "Building Hardware (HW)..."
-        print_command "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m r --rev 6 ht Grab --cvapp GPR_APP"
-        tcsh -c "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m r --rev 6 ht Grab --cvapp GPR_APP"
+        HW_APP=${HW_APP:-GPR_APP}
+        print_info "HW app: $HW_APP"
+        print_command "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m r --rev 6 ht Grab --cvapp $HW_APP"
+        tcsh -c "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m r --rev 6 ht Grab --cvapp $HW_APP"
     elif [ "$BUILD_TYPE" = "SW" ]; then
         print_info "Building Software (SW)..."
-        print_command "source ME.Develop/BuildSys/TreeConfig.sh && ./wake -m d --rev 6 st Grab"
-        tcsh -c "source ME.Develop/BuildSys/TreeConfig.sh && ./wake -m d --rev 6 st Grab"
+        print_command "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m d --rev 6 st Grab"
+        tcsh -c "source ME.Develop/BuildSys/TreeConfig.sh && cd ME.Develop/applications/CV && ./wake -m d --rev 6 st Grab"
     else
         print_error "Invalid BUILD_TYPE: $BUILD_TYPE (must be HW or SW)"
         return 1

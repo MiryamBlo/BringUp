@@ -7,6 +7,7 @@ ENV_PATH=
 ZERO_CONFIG_PATH=
 BUILD_TYPE=
 OUTPUT_BASE=
+HW_APP=GPR_APP
 AVPC_IP=
 # Do NOT set AVPC_PASSWORD here in repository. Configure it locally or use a secrets manager.
 AVPC_PASSWORD=

@@ -68,6 +68,9 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#
 .btn:hover{transform:translateY(-2px);box-shadow:0 6px 12px rgba(0,0,0,0.15)}
 .btn:disabled{opacity:0.6;cursor:not-allowed;transform:none}
 .btn-update{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+/* smaller variant for less prominent actions */
+.btn-small{padding:8px 14px;font-size:0.9em;border-radius:6px;box-shadow:none}
+
 .btn-build{background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%)}
 .btn-generate{background:linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)}
 .btn-deploy{background:linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)}
@@ -149,14 +152,10 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#
 <button class="btn btn-generate" onclick="executeCommand('-g','Generate Package')">📦 Generate Package</button>
 <button class="btn btn-deploy" onclick="executeCommand('-d','Deploy to Setup')">🚀 Deploy to Setup</button>
 <button class="btn btn-install" onclick="executeCommand('-i','Install on Setup')">⚡ Install on Setup</button>
-</div>
-</div>
-<div class="section">
-<div class="section-title">🌱 Environment Setup</div>
-<div class="button-grid">
 <button class="btn btn-update" onclick="openEnvCreator()">🔧 Create Environment</button>
 </div>
 </div>
+
 <div class="section">
 <div class="section-title">🔗 Combined Operations</div>
 <div class="button-grid">
@@ -223,6 +222,12 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#
 <select class="form-input" id="edit-build-type">
 <option value="HW">HW</option>
 <option value="SW">SW</option>
+</select>
+</div>
+<div class="form-group"><label class="form-label">HW_APP</label>
+<select class="form-input" id="edit-hw-app">
+<option value="GPR_APP">GPR_APP</option>
+<option value="CV_BPP">CV_BPP</option>
 </select>
 </div>
 <div class="form-group">
@@ -454,6 +459,7 @@ function openConfigEditor() {
         document.getElementById('edit-env-path').value = data.ENV_PATH || '';
         document.getElementById('edit-zero-config-path').value = data.ZERO_CONFIG_PATH || '';
         document.getElementById('edit-build-type').value = data.BUILD_TYPE || 'HW';
+        document.getElementById('edit-hw-app').value = data.HW_APP || 'GPR_APP';
         document.getElementById('edit-output-base').value = data.OUTPUT_BASE || '';
         document.getElementById('edit-avpc-ip').value = data.AVPC_IP || '';
         document.getElementById('edit-avpc-password').value = data.AVPC_PASSWORD || '';
@@ -474,6 +480,7 @@ function saveConfig() {
         ENV_PATH: document.getElementById('edit-env-path').value,
         ZERO_CONFIG_PATH: document.getElementById('edit-zero-config-path').value,
         BUILD_TYPE: document.getElementById('edit-build-type').value,
+        HW_APP: document.getElementById('edit-hw-app').value,
         OUTPUT_BASE: document.getElementById('edit-output-base').value,
         AVPC_IP: document.getElementById('edit-avpc-ip').value,
         AVPC_PASSWORD: document.getElementById('edit-avpc-password').value
@@ -599,7 +606,7 @@ def save_config_route():
         
         with open(config_file, 'w') as f:
             f.write("# Build Configuration File\n\n")
-            for key in ['APP_ROOT', 'PROJECT_NAME', 'SETUP_NAME', 'ENV_PATH', 'ZERO_CONFIG_PATH', 'BUILD_TYPE', 'OUTPUT_BASE', 'AVPC_IP', 'AVPC_PASSWORD']:
+            for key in ['APP_ROOT', 'PROJECT_NAME', 'SETUP_NAME', 'ENV_PATH', 'ZERO_CONFIG_PATH', 'BUILD_TYPE', 'HW_APP', 'OUTPUT_BASE', 'AVPC_IP', 'AVPC_PASSWORD']:
                 f.write(f"{key}={data.get(key, '')}\n\n")
         
         return jsonify({'success': True, 'message': 'Configuration saved successfully'})
@@ -732,7 +739,7 @@ def write_full_config_dict(conf):
             shutil.copy2(config_file, backup_file)
         with open(config_file, 'w') as f:
             f.write("# Build Configuration File\n\n")
-            for key in ['APP_ROOT', 'PROJECT_NAME', 'SETUP_NAME', 'ENV_PATH', 'ZERO_CONFIG_PATH', 'BUILD_TYPE', 'OUTPUT_BASE', 'AVPC_IP', 'AVPC_PASSWORD']:
+            for key in ['APP_ROOT', 'PROJECT_NAME', 'SETUP_NAME', 'ENV_PATH', 'ZERO_CONFIG_PATH', 'BUILD_TYPE', 'HW_APP', 'OUTPUT_BASE', 'AVPC_IP', 'AVPC_PASSWORD']:
                 f.write(f"{key}={conf.get(key, '')}\n\n")
     except Exception:
         pass
