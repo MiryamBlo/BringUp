@@ -1,0 +1,12 @@
+# Example Build Configuration File (remove sensitive values from repo)
+
+APP_ROOT=
+PROJECT_NAME=
+SETUP_NAME=
+ENV_PATH=
+ZERO_CONFIG_PATH=
+BUILD_TYPE=
+OUTPUT_BASE=
+AVPC_IP=
+# Do NOT set AVPC_PASSWORD here in repository. Configure it locally or use a secrets manager.
+AVPC_PASSWORD=
