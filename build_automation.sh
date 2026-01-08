@@ -63,6 +63,8 @@ print_step() {
 print_command() {
     echo -e "${MAGENTA}[COMMAND]${NC} (from: $PWD)"
     echo -e "${MAGENTA}[COMMAND]${NC} $1"
+    # Also print a plain, easy-to-read shell command line for tools and UIs
+    echo -e "\u2192 $1"
 }
 
 # Function to show usage

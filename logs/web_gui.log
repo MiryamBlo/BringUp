@@ -1,0 +1,100 @@
+
+============================================================
+Build Automation Web GUI
+============================================================
+
+Server starting...
+Build script: /mobileye/epg_archive/miryamb/build_automation/build_automation.sh
+Config file: /mobileye/epg_archive/miryamb/build_automation/build_config.cfg
+
+============================================================
+Open your browser and navigate to:
+
+  http://localhost:8080
+
+  Or if accessing remotely:
+  http://epgd031:8080
+============================================================
+
+Press Ctrl+C to stop the server
+
+ * Serving Flask app 'build_automation_web_gui'
+ * Debug mode: off
+Address already in use
+Port 8080 is in use by another program. Either identify and stop that program, or start the server with a different port.
+
+============================================================
+Build Automation Web GUI
+============================================================
+
+Server starting...
+Build script: /mobileye/epg_archive/miryamb/build_automation/build_automation.sh
+Config file: /mobileye/epg_archive/miryamb/build_automation/build_config.cfg
+
+============================================================
+Open your browser and navigate to:
+
+  http://localhost:8080
+
+  Or if accessing remotely:
+  http://epgd031:8080
+============================================================
+
+Press Ctrl+C to stop the server
+
+ * Serving Flask app 'build_automation_web_gui'
+ * Debug mode: off
+Address already in use
+Port 8080 is in use by another program. Either identify and stop that program, or start the server with a different port.
+
+============================================================
+Build Automation Web GUI
+============================================================
+
+Server starting...
+Build script: /mobileye/epg_archive/miryamb/build_automation/build_automation.sh
+Config file: /mobileye/epg_archive/miryamb/build_automation/build_config.cfg
+
+============================================================
+Open your browser and navigate to:
+
+  http://localhost:8080
+
+  Or if accessing remotely:
+  http://epgd031:8080
+============================================================
+
+Press Ctrl+C to stop the server
+
+ * Serving Flask app 'build_automation_web_gui'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://10.155.35.52:8080
+Press CTRL+C to quit
+127.0.0.1 - - [08/Jan/2026 10:44:32] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:33] "GET /get_full_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:36] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:37] "GET /get_full_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:50] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:52] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:44:53] "GET /get_full_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:09] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:10] "GET /get_full_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:26] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:27] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:56] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:45:57] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:00] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:26] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:27] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:30] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:49] "GET /get_config HTTP/1.1" 200 -
+127.0.0.1 - - [08/Jan/2026 10:46:56] "GET /get_config HTTP/1.1" 200 -
