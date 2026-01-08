@@ -1,0 +1,8 @@
+# Ignore local build config that may contain secrets
+build_config.cfg
+
+# Ignore config backups that may leak secrets
+build_config.cfg.backup.*
+
+# Ignore last generated bkc path file (local runtime artifact)
+.env_path/.last_bkc_path
