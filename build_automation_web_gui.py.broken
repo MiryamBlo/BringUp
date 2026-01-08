@@ -1,0 +1,934 @@
+#!/usr/bin/env python3
+
+"""
+Build Automation Web GUI
+A web-based interface with buttons for the build automation workflow
+Access via browser at http://localhost:8080
+"""
+
+from flask import Flask, render_template, jsonify, request, send_from_directory
+import subprocess
+import os
+import threading
+import queue
+from pathlib import Path
+import signal
+import sys
+
+app = Flask(__name__)
+
+# Global variables
+script_dir = Path(__file__).parent.absolute()
+build_script = script_dir / "build_automation.sh"
+config_file = script_dir / "build_config.cfg"
+current_process = None
+output_queue = queue.Queue()
+is_running = False
+
+HTML_TEMPLATE = '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Build Automation GUI</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .config-section {
+            padding: 25px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .config-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .config-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .config-label {
+            font-weight: 600;
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .config-value {
+            color: #212529;
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        .section {
+            padding: 25px;
+        }
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 15px 25px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-update { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .btn-build { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .btn-generate { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .btn-deploy { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .btn-install { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .btn-combined { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
+        .btn-all { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); font-size: 1.1em; }
+        .log-section {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        .log-line {
+            margin: 2px 0;
+            word-wrap: break-word;
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .btn-clear {
+            padding: 8px 16px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .btn-clear:hover {
+            background: #c82333;
+        }
+        .status-bar {
+            background: #343a40;
+            color: white;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+        .status-dot.running {
+            background: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .spinner.active {
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 500px;
+            text-align: center;
+        }
+        .modal-content h2 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        .modal-content p {
+            margin-bottom: 25px;
+            color: #6c757d;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .modal-btn {
+            padding: 10px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        .modal-btn-yes {
+            background: #28a745;
+            color: white;
+        }
+        .modal-btn-no {
+            background: #6c757d;
+            color: white;
+        }
+        .edit-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+        }
+        .edit-modal.active {
+            display: flex;
+        }
+        .edit-modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .edit-modal-content h2 {
+            margin-bottom: 20px;
+            color: #495057;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 1em;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-help {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .edit-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+        .btn-save {
+            padding: 12px 30px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        .btn-save:hover {
+            background: #218838;
+        }
+        .btn-cancel {
+            padding: 12px 30px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+        .btn-edit-config {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .btn-edit-config:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Build Automation Control Panel</h1>
+            <p>Manage your build, generate, deploy, and install workflows</p>
+        </div>
+        
+        <div class="config-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="config-title" style="margin-bottom: 0;">📋 Configuration</div>
+                <button class="btn-edit-config" onclick="openConfigEditor()">✏️ Edit Config</button>
+            </div>
+            <div class="config-grid">
+                <div class="config-item">
+                    <div class="config-label">Config File</div>
+                    <div class="config-value" id="config-file">{{ config_file }}</div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Project Name</div>
+                    <div class="config-value" id="project-name">{{ project_name }}</div>
+                </div>
+                <div class="config-item">
+                    <div class="config-label">Build Type</div>
+                    <div class="config-value" id="build-type">{{ build_type }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">🔧 Individual Operations</div>
+            <div class="button-grid">
+                <button class="btn btn-update" onclick="executeCommand('-u', 'Update APP_ROOT')">
+                    📝 Update APP_ROOT
+                </button>
+                <button class="btn btn-build" onclick="executeCommand('-b', 'Build Project')">
+                    🔨 Build Project
+                </button>
+                <button class="btn btn-generate" onclick="executeCommand('-g', 'Generate Package')">
+                    📦 Generate Package
+                </button>
+                <button class="btn btn-deploy" onclick="executeCommand('-d', 'Deploy to Setup')">
+                    🚀 Deploy to Setup
+                </button>
+                <button class="btn btn-install" onclick="executeCommand('-i', 'Install on Setup')">
+                    ⚡ Install on Setup
+                </button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">🔗 Combined Operations</div>
+            <div class="button-grid">
+                <button class="btn btn-combined" onclick="executeCommand('-b -g', 'Build + Generate')">
+                    Build + Generate
+                </button>
+                <button class="btn btn-combined" onclick="executeCommand('-g -d', 'Generate + Deploy')">
+                    Generate + Deploy
+                </button>
+                <button class="btn btn-combined" onclick="executeCommand('-d -i', 'Deploy + Install')">
+                    Deploy + Install
+                </button>
+                <button class="btn btn-combined" onclick="executeCommand('-u -b -g', 'Update + Build + Generate')">
+                    Update + Build + Generate
+                </button>
+                <button class="btn btn-all" onclick="executeCommand('-a', 'Execute All Steps')">
+                    ⚡ Execute All Steps
+                </button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="log-header">
+                <div class="section-title" style="margin: 0; border: 0;">📊 Execution Log</div>
+                <button class="btn-clear" onclick="clearLog()">Clear Log</button>
+            </div>
+            <div class="log-section" id="log-output"></div>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="status-text">Ready</span>
+            </div>
+            <div class="spinner" id="spinner"></div>
+        </div>
+    </div>
+    
+    <div class="modal" id="confirm-modal">
+        <div class="modal-content">
+            <h2>Confirm Action</h2>
+            <p id="confirm-message"></p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-yes" onclick="confirmYes()">Yes, Execute</button>
+          
+    
+    <div class="edit-modal" id="edit-modal">
+        <div class="edit-modal-content">
+            <h2>✏️ Edit Configuration</h2>
+            <form id="config-form">
+                <div class="form-group">
+                    <label class="form-label" for="edit-app-root">APP_ROOT</label>
+                    <input type="text" class="form-input" id="edit-app-root" name="APP_ROOT">
+                    <div class="form-help">Application root path</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-project-name">PROJECT_NAME</label>
+                    <input type="text" class="form-input" id="edit-project-name" name="PROJECT_NAME">
+                    <div class="form-help">Name of the project</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-setup-name">SETUP_NAME</label>
+                    <input type="text" class="form-input" id="edit-setup-name" name="SETUP_NAME">
+                    <div class="form-help">Setup hostname for SSH deployment</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-env-path">ENV_PATH</label>
+                    <input type="text" class="form-input" id="edit-env-path" name="ENV_PATH">
+                    <div class="form-help">Base path for the workspace</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-build-type">BUILD_TYPE</label>
+                    <select class="form-input" id="edit-build-type" name="BUILD_TYPE">
+                        <option value="HW">HW (Hardware)</option>
+                        <option value="SW">SW (Software)</option>
+                    </select>
+                    <div class="form-help">Build type: Hardware or Software</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-output-base">OUTPUT_BASE</label>
+                    <input type="text" class="form-input" id="edit-output-base" name="OUTPUT_BASE">
+                    <div class="form-help">Output directory base path</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-avpc-ip">AVPC_IP</label>
+                    <input type="text" class="form-input" id="edit-avpc-ip" name="AVPC_IP">
+                    <div class="form-help">AVPC IP address</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="edit-avpc-password">AVPC_PASSWORD</label>
+                    <input type="password" class="form-input" id="edit-avpc-password" name="AVPC_PASSWORD">
+                    <div class="form-help">AVPC password</div>
+                </div>
+                
+                <div class="edit-buttons">
+                    <button type="button" class="btn-cancel" onclick="closeConfigEditor()">Cancel</button>
+                    <button type="button" class="btn-save" onclick="saveConfig()">💾 Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>      <button class="modal-btn modal-btn-no" onclick="confirmNo()">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let pendingCommand = null;
+        let pendingDescription = null;
+        let logUpdateInterval = null;
+        
+        function executeCommand(options, description) {
+            pendingCommand = options;
+            pendingDescription = description;
+            document.getElementById('confirm-message').textContent = 
+                `Are you sure you want to execute: ${description}?`;
+            document.getElementById('confirm-modal').classList.add('active');
+        }
+        
+        function confirmNo() {
+            document.getElementById('confirm-modal').classList.remove('active');
+            pendingCommand = null;
+            pendingDescription = null;
+        }
+        
+        function confirmYes() {
+            document.getElementById('confirm-modal').classList.remove('active');
+            if (pendingCommand) {
+                runCommand(pendingCommand, pendingDescription);
+            }
+        }
+        
+        function runCommand(options, description) {
+            setStatus('running', `Executing: ${description}...`);
+            disableButtons(true);
+            
+            fetch('/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ options: options, description: description })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    logUpdateInterval = setInterval(updateLog, 500);
+        function openConfigEditor() {
+            fetch('/get_full_config')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('edit-app-root').value = data.APP_ROOT || '';
+                document.getElementById('edit-project-name').value = data.PROJECT_NAME || '';
+                document.getElementById('edit-setup-name').value = data.SETUP_NAME || '';
+                document.getElementById('edit-env-path').value = data.ENV_PATH || '';
+                document.getElementById('edit-build-type').value = data.BUILD_TYPE || 'HW';
+                document.getElementById('edit-output-base').value = data.OUTPUT_BASE || '';
+                document.getElementById('edit-avpc-ip').value = data.AVPC_IP || '';
+                document.getElementById('edit-avpc-password').value = data.AVPC_PASSWORD || '';
+                
+                document.getElementById('edit-modal').classList.add('active');
+            })
+            .catch(error => {
+                alert('Error loading configuration: ' + error);
+            });
+        }
+        
+        function closeConfigEditor() {
+            document.getElementBy
+
+@app.route('/get_full_config')
+def get_full_config():
+    """Get full configuration for editing"""
+    config_data = {}
+    
+    try:
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        config_data[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"Error loading config: {e}")
+    
+    return jsonify(config_data)
+
+@app.route('/save_config', methods=['POST'])
+def save_config():
+    """Save configuration to file"""
+    try:
+        data = request.json
+        
+        # Create backup
+        if config_file.exists():
+            import shutil
+            from datetime import datetime
+            backup_file = config_file.parent / f"{config_file.name}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(config_file, backup_file)
+        
+        # Write new config
+        with open(config_file, 'w') as f:
+            f.write("# Build Configuration File\n")
+            f.write("# This file contains parameters for the build/deploy automation script\n\n")
+            
+            f.write("# Application root path\n")
+            f.write(f"APP_ROOT={data.get('APP_ROOT', '')}\n\n")
+            
+            f.write("# Project name\n")
+            f.write(f"PROJECT_NAME={data.get('PROJECT_NAME', '')}\n\n")
+            
+            f.write("# Setup name for SSH deployment\n")
+            f.write(f"SETUP_NAME={data.get('SETUP_NAME', '')}\n\n")
+            
+            f.write("# Environment path (base path for the workspace)\n")
+            f.write(f"ENV_PATH={data.get('ENV_PATH', '')}\n\n")
+            
+            f.write("# Build type: HW or SW\n")
+            f.write(f"BUILD_TYPE={data.get('BUILD_TYPE', 'HW')}\n\n")
+            
+            f.write("# Output directory base path\n")
+            f.write(f"OUTPUT_BASE={data.get('OUTPUT_BASE', '')}\n\n")
+            
+            f.write("# AVPC IP address\n")
+            f.write(f"AVPC_IP={data.get('AVPC_IP', '')}\n\n")
+            
+            f.write("# AVPC password\n")
+            f.write(f"AVPC_PASSWORD={data.get('AVPC_PASSWORD', '')}\n\n")
+        
+        return jsonify({'success': True, 'message': 'Configuration saved successfully'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})Id('edit-modal').classList.remove('active');
+        }
+        
+        function saveConfig() {
+            const formData = {
+                APP_ROOT: document.getElementById('edit-app-root').value,
+                PROJECT_NAME: document.getElementById('edit-project-name').value,
+                SETUP_NAME: document.getElementById('edit-setup-name').value,
+                ENV_PATH: document.getElementById('edit-env-path').value,
+                BUILD_TYPE: document.getElementById('edit-build-type').value,
+                OUTPUT_BASE: document.getElementById('edit-output-base').value,
+                AVPC_IP: document.getElementById('edit-avpc-ip').value,
+                AVPC_PASSWORD: document.getElementById('edit-avpc-password').value
+            };
+            
+            if (!confirm('Save configuration changes?')) {
+                return;
+            }
+            
+            fetch('/save_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✓ Configuration saved successfully!');
+                    closeConfigEditor();
+                    // Refresh the config display
+                    fetch('/get_config')
+                    .then(response => response.json())
+                    .then(config => {
+                        document.getElementById('config-file').textContent = config.config_file;
+                        document.getElementById('project-name').textContent = config.project_name;
+                        document.getElementById('build-type').textContent = config.build_type;
+                    });
+                } else {
+                    alert('Error saving configuration: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error saving configuration: ' + error);
+            });
+        }
+        
+                } else {
+                    addLog(`Error: ${data.message}`);
+                    setStatus('ready', 'Ready');
+                    disableButtons(false);
+                }
+            });
+        }
+        
+        function updateLog() {
+            fetch('/get_output')
+            .then(response => response.json())
+            .then(data => {
+                if (data.output) {
+                    data.output.forEach(line => addLog(line));
+                }
+                if (data.finished) {
+                    clearInterval(logUpdateInterval);
+                    setStatus('ready', data.status);
+                    disableButtons(false);
+                    if (data.success) {
+                        alert(`✓ ${data.description} completed successfully!`);
+                    } else {
+                        alert(`✗ ${data.description} failed!`);
+                    }
+                }
+            });
+        }
+        
+        function addLog(message) {
+            const logDiv = document.getElementById('log-output');
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.textContent = message;
+            logDiv.appendChild(line);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log-output').innerHTML = '';
+        }
+        
+        function setStatus(state, text) {
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const spinner = document.getElementById('spinner');
+            
+            statusText.textContent = text;
+            
+            if (state === 'running') {
+                dot.classList.add('running');
+                spinner.classList.add('active');
+            } else {
+                dot.classList.remove('running');
+                spinner.classList.remove('active');
+            }
+        }
+        
+        function disableButtons(disabled) {
+            document.querySelectorAll('.btn').forEach(btn => {
+                btn.disabled = disabled;
+            });
+        }
+        
+        // Auto-refresh config every 30 seconds
+        setInterval(() => {
+            fetch('/get_config')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('config-file').textContent = data.config_file;
+                document.getElementById('project-name').textContent = data.project_name;
+                document.getElementById('build-type').textContent = data.build_type;
+            });
+        }, 30000);
+    </script>
+</body>
+</html>'''
+
+@app.route('/')
+def index():
+    config_data = load_config()
+    return render_template_string(HTML_TEMPLATE, **config_data)
+
+@app.route('/get_config')
+def get_config():
+    return jsonify(load_config())
+
+@app.route('/execute', methods=['POST'])
+def execute():
+    global current_process, is_running, output_queue
+    
+    if is_running:
+        return jsonify({'success': False, 'message': 'Another command is already running'})
+    
+    data = request.json
+    options = data.get('options', '')
+    description = data.get('description', '')
+    
+    # Clear output queue
+    while not output_queue.empty():
+        output_queue.get()
+    
+    # Start command in thread
+    thread = threading.Thread(target=run_command, args=(options, description))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'success': True})
+
+@app.route('/get_output')
+def get_output():
+    global is_running
+    
+    output_lines = []
+    while not output_queue.empty():
+        output_lines.append(output_queue.get())
+    
+    return jsonify({
+        'output': output_lines,
+        'finished': not is_running,
+        'success': getattr(current_process, 'returncode', 0) == 0 if current_process else False,
+        'status': 'Ready' if not is_running else 'Running...',
+        'description': getattr(current_process, 'description', '')
+    })
+
+def load_config():
+    """Load configuration from file"""
+    config_data = {
+        'config_file': str(config_file.name),
+        'project_name': 'N/A',
+        'build_type': 'N/A'
+    }
+    
+    try:
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        if key == 'PROJECT_NAME':
+                            config_data['project_name'] = value
+                        elif key == 'BUILD_TYPE':
+                            config_data['build_type'] = value
+    except Exception as e:
+        print(f"Error loading config: {e}")
+    
+    return config_data
+
+def run_command(options, description):
+    """Run build automation command"""
+    global current_process, is_running
+    
+    is_running = True
+    output_queue.put(f"\n{'='*60}")
+    output_queue.put(f"Executing: {description}")
+    output_queue.put(f"Config: {config_file}")
+    output_queue.put(f"Command: {build_script} -c {config_file} {options}")
+    output_queue.put(f"{'='*60}\n")
+    
+    try:
+        cmd = [str(build_script), "-c", str(config_file)] + options.split()
+        
+        current_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        current_process.description = description
+        
+        for line in current_process.stdout:
+            output_queue.put(line.rstrip())
+        
+        current_process.wait()
+        
+        if current_process.returncode == 0:
+            output_queue.put(f"\n✓ {description} completed successfully!\n")
+        else:
+            output_queue.put(f"\n✗ {description} failed with exit code {current_process.returncode}\n")
+    
+    except Exception as e:
+        output_queue.put(f"\n✗ Error: {str(e)}\n")
+        if current_process:
+            current_process.returncode = 1
+    
+    finally:
+        is_running = False
+
+def render_template_string(template, **context):
+    """Simple template renderer"""
+    for key, value in context.items():
+        template = template.replace('{{ ' + key + ' }}', str(value))
+    return template
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C gracefully"""
+    print('\n\nShutting down server...')
+    sys.exit(0)
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    print("\n" + "="*60)
+    print("Build Automation Web GUI")
+    print("="*60)
+    print(f"\nServer starting...")
+    print(f"Build script: {build_script}")
+    print(f"Config file: {config_file}")
+    print("\n" + "="*60)
+    print("Open your browser and navigate to:")
+    print("\n  http://localhost:8080")
+    print("\n  Or if accessing remotely:")
+    print(f"  http://{os.uname()[1]}:8080")
+    print("="*60)
+    print("\nPress Ctrl+C to stop the server\n")
+    
+    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)

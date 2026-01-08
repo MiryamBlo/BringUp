@@ -118,6 +118,12 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#
 </div>
 </div>
 <div class="section">
+<div class="section-title">🌱 Environment Setup</div>
+<div class="button-grid">
+<button class="btn btn-update" onclick="openEnvCreator()">🔧 Create Environment</button>
+</div>
+</div>
+<div class="section">
 <div class="section-title">🔗 Combined Operations</div>
 <div class="button-grid">
 <button class="btn btn-combined" onclick="executeCommand('-b -g','Build + Generate')">Build + Generate</button>
@@ -199,6 +205,19 @@ body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#667eea 0%,#
 <button type="button" class="btn-save" onclick="saveConfig()">💾 Save</button>
 </div>
 </form>
+</div>
+</div>
+<div class="edit-modal" id="env-creator-modal">
+<div class="edit-modal-content">
+<h2>🌱 Create Environment</h2>
+<p style="margin-bottom:20px">Select environment type to clone:</p>
+<div class="button-grid">
+<button class="btn btn-update" onclick="createEnvironment('AVM')">📦 AVM</button>
+<button class="btn btn-generate" onclick="createEnvironment('Bundle')">📦 Bundle</button>
+</div>
+<div style="margin-top:20px">
+<button type="button" class="btn-cancel" onclick="closeEnvCreator()">Cancel</button>
+</div>
 </div>
 </div>
 <script>
@@ -395,6 +414,38 @@ function refreshConfig() {
     });
 }
 
+function openEnvCreator() {
+    document.getElementById('env-creator-modal').classList.add('active');
+}
+
+function closeEnvCreator() {
+    document.getElementById('env-creator-modal').classList.remove('active');
+}
+
+function createEnvironment(envType) {
+    closeEnvCreator();
+    setStatus('running', 'Creating ' + envType + ' environment...');
+    disableButtons(true);
+    showStopButton(true);
+    
+    fetch('/create_environment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({env_type: envType})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            logUpdateInterval = setInterval(updateLog, 500);
+        } else {
+            addLog('Error: ' + data.message);
+            setStatus('ready', 'Ready');
+            disableButtons(false);
+            showStopButton(false);
+        }
+    });
+}
+
 setInterval(() => {
     fetch('/get_config')
     .then(r => r.json())
@@ -459,6 +510,24 @@ def execute():
         output_queue.get()
     
     thread = threading.Thread(target=run_command, args=(data.get('options', ''), data.get('description', '')))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({'success': True})
+
+@app.route('/create_environment', methods=['POST'])
+def create_environment():
+    global current_process, is_running, output_queue
+    if is_running:
+        return jsonify({'success': False, 'message': 'Another command is already running'})
+    
+    data = request.json
+    env_type = data.get('env_type', '')
+    
+    while not output_queue.empty():
+        output_queue.get()
+    
+    thread = threading.Thread(target=run_env_creation, args=(env_type,))
     thread.daemon = True
     thread.start()
     
@@ -568,6 +637,72 @@ def run_command(options, description):
         else:
             output_queue.put("")
             output_queue.put(f"✗ {description} failed with exit code {current_process.returncode}")
+            output_queue.put("")
+    except Exception as e:
+        output_queue.put("")
+        output_queue.put(f"✗ Error: {str(e)}")
+        output_queue.put("")
+        if current_process:
+            current_process.returncode = 1
+    finally:
+        is_running = False
+
+def run_env_creation(env_type):
+    global current_process, is_running
+    is_running = True
+    output_queue.put("")
+    output_queue.put("=" * 60)
+    output_queue.put(f"Creating {env_type} Environment")
+    output_queue.put("=" * 60)
+    output_queue.put("")
+    
+    try:
+        if env_type == 'AVM':
+            repo_url = 'git@gitlab-il.mobileye.com:AVM_SDK/Fusion_Team/AVM_Repos/AVM.git'
+            target_dir = script_dir / 'AVM'
+        elif env_type == 'Bundle':
+            repo_url = 'git@gitlab-il.mobileye.com:AVM_SDK/Fusion_Team/AVM_Repos/Bundle.git'
+            target_dir = script_dir / 'Bundle'
+        else:
+            output_queue.put(f"✗ Unknown environment type: {env_type}")
+            is_running = False
+            return
+        
+        output_queue.put(f"Cloning from: {repo_url}")
+        output_queue.put(f"Target directory: {target_dir}")
+        output_queue.put("")
+        
+        cmd = ['git', 'clone', repo_url, str(target_dir)]
+        current_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1,
+            cwd=str(script_dir)
+        )
+        current_process.description = f"Create {env_type} Environment"
+        current_process.stopped = False
+        
+        for line in current_process.stdout:
+            output_queue.put(line.rstrip())
+            if hasattr(current_process, 'stopped') and current_process.stopped:
+                break
+        
+        current_process.wait()
+        
+        if hasattr(current_process, 'stopped') and current_process.stopped:
+            output_queue.put("")
+            output_queue.put(f"⏹ Environment creation was stopped by user")
+            output_queue.put("")
+        elif current_process.returncode == 0:
+            output_queue.put("")
+            output_queue.put(f"✓ {env_type} environment created successfully!")
+            output_queue.put(f"Location: {target_dir}")
+            output_queue.put("")
+        else:
+            output_queue.put("")
+            output_queue.put(f"✗ Environment creation failed with exit code {current_process.returncode}")
             output_queue.put("")
     except Exception as e:
         output_queue.put("")
